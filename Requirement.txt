@@ -1,0 +1,48 @@
+Key requirements for the distributed cache system:
+
+1. The cache should have two main functionalities:
+    - Get: Given a key, fetch the associated value
+    - Put: Given a key and value, insert it into the cache (v0 it is not available for the client)
+2. The cache should be distributed across multiple nodes.
+3. There should be a load balancer or system to decide which data is kept in which node.
+4. The cache should be able to answer get queries in O(1) time complexity.
+5. The system should be flexible to allow changing the data distribution policy in the future.
+6. The cache should implement an eviction policy (e.g., LRU - Least Recently Used). For this case we have to use LRU case, hence implement it. 
+7. The system should be flexible to allow changing the eviction policy in the future.
+8. The cache should implement request collapsing to prevent multiple identical database queries.
+9. The system should implement retry logic for failed requests.
+10. The cache should implement prefetching to fetch data before it's requested.
+11. Each key should have a Time To Live (TTL) associated with it.
+12. The system should be able to scale up or down (add or remove nodes).
+13. The cache should handle stale data and updates.
+14. The system should be able to redistribute data when nodes are added or removed.
+15. The design should be flexible enough to accommodate future changes in distribution strategy and eviction policies.
+16. The cache should be able to handle keys and values of different types (not just primitives, but objects implementing certain interfaces).
+17. The system should be concurrent, able to handle multiple requests simultaneously.
+claude --resume 07ac8d3c-89c0-4d1e-9049-45d8c535becb 
+
+
+For a low-level design exercise, model everything as classes. A Node is a class. A Cluster is a class that holds a list of Node objects. A LoadBalancer is a class. The "network
+  call" between load balancer and node becomes a method call — node.get(key). The "network call" between node and database becomes database.get(key).
+
+  This is the right simplification because:
+
+  - In real distributed systems, the boundary between machines is exactly at method calls. A real system would later swap node.get(key) with an HTTP/gRPC call, but the interface
+  stays the same.
+  - Your course is about how classes talk to each other — the design patterns, responsibilities, and abstractions. Not about sockets and serialization.
+
+  To answer your specific doubts:
+
+  - Node: A class that owns a cache (your LRU data structure) and knows how to talk to the database. Think of it as: "if this key is in my cache, return it; otherwise, ask the DB,
+  cache it, then return it."
+  - Cluster: Yes, it's conceptual — it's just a class that holds List<Node> and maybe knows how many nodes are active. It's the thing the load balancer queries to figure out where
+  to route.
+  - Database: A class with a get(key) method. For V0, it can just be a HashMap that's pre-populated.
+
+  How to get started:
+
+  Think about who owns what responsibility. Start by asking yourself: "If I'm the LoadBalancer and I receive get(4), what do I need to know, and who do I ask?" That chain of
+  delegation — LoadBalancer -> Node -> Cache -> Database — is your class design. Each arrow is an interface you need to define.
+
+  The requirement file's emphasis on "flexible to change distribution policy" and "flexible to change eviction policy" is hinting at a specific design pattern — that's worth
+  thinking about as you define those interfaces.
