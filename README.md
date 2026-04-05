@@ -1,6 +1,6 @@
 # Distributed Cache System
 
-A Java-based distributed cache system with advanced features including LRU eviction, prefetching, and pluggable distribution strategies.
+A Java-based distributed cache system.
 
 ## Table of Contents
 
