@@ -5,6 +5,12 @@ A Java-based distributed cache system.
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
+- [Diagram Files](#diagram-files)
+- [Key Design Questions](#key-design-questions)
+  - [How is data distributed across nodes?](#how-is-data-distributed-across-nodes)
+  - [How is cache miss handled?](#how-is-cache-miss-handled)
+  - [How does eviction work?](#how-does-eviction-work)
+  - [How does the design support future extensibility?](#how-does-the-design-support-future-extensibility)
 - [Class Documentation](#class-documentation)
   - [Client (Entry Point)](#client-java---entry-point)
   - [ApiServerGateway](#apiservergatewayjava---gateway)
@@ -28,6 +34,54 @@ A Java-based distributed cache system.
 - [Project Setup Guide](#project-setup-guide)
 - [Running the Application](#running-the-application)
 - [Future Enhancements](#future-enhancements)
+
+---
+
+## Diagram Files
+
+- **Class Diagram Source**: The class diagram is stored in `cache.drawio` (draw.io format)
+- **Class Diagram Image**: A PNG export of the class diagram is available in `Diagram.png`
+
+## Key Design Questions
+
+### How is data distributed across nodes?
+
+Data is distributed using a **modulo-based node selection strategy**. When a key is requested, the system determines which node should handle it using the formula: `nodeId = key % nodeCount`. This ensures that the same key always maps to the same node, providing consistent lookups. The `ModuloNodeSelectionStrategy` implements this logic, and the `Cluster` class maintains a map of nodes and uses this strategy to route requests through the `ApiServerGateway`.
+
+### How is cache miss handled?
+
+When a cache miss occurs, the following sequence happens:
+1. The `Node.getValue()` method is called with the requested key
+2. If the key is not in the cache, it calls the `Repository` (singleton) to fetch the value from the underlying data store (fake-db.json)
+3. The value is put into the cache using `putIntoCache()`
+4. **Prefetch is triggered**: The `FixedFetch` prefetch strategy loads related keys (keys in range `[key - threshold, key + threshold]`) into the cache proactively
+5. The value is returned to the client
+
+This ensures that future requests for adjacent keys are likely to be cache hits.
+
+### How does eviction work?
+
+Eviction is handled using the **Strategy Pattern** with the `EvictionStrategy` interface. The default implementation is `LruEvictionStrategy` which uses Java's `LinkedHashMap` with access-order mode:
+- The cache is a `LinkedHashMap` with access-order enabled (third parameter `true`)
+- When `get()` or `put()` is called, the accessed/inserted entry moves to the end (most recently used)
+- The `removeEldestEntry()` method is overridden to automatically remove the first entry (least recently used) when size exceeds capacity
+- This provides O(1) eviction without manual tracking
+
+The `LruEvictionStrategy` class provides `onAccess()` and `onPut()` methods that work with the LinkedHashMap to maintain LRU ordering.
+
+### How does the design support future extensibility?
+
+The design uses several patterns that make it easily extensible:
+
+1. **Strategy Pattern**: Both `EvictionStrategy` and `Prefetch` are interfaces that can have new implementations. You can add `TtlEvictionStrategy`, `LfuEvictionStrategy`, or `PredictiveFetch` without modifying existing code.
+
+2. **Data Distribution Abstraction**: The `DataDistribution` abstract class defines `additionRearrange()` and `removalRearrange()` methods. Future implementations could use consistent hashing instead of modulo-based distribution.
+
+3. **Node Selection Strategy**: The `INodeSelectionStrategy` interface allows plugging in different routing algorithms (e.g., weighted distribution, geographic-based routing).
+
+4. **Repository Pattern**: The `Repository` abstraction can be extended to connect to real databases (SQL, NoSQL) instead of the fake JSON file.
+
+5. **Clean Separation of Concerns**: Each class has a single responsibility (Node handles caching, Cluster handles orchestration, Gateway handles routing), making it easy to modify or extend individual components.
 
 ---
 
